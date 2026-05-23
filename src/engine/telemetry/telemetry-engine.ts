@@ -19,6 +19,9 @@ export interface TelemetrySnapshot {
   readonly frames: readonly FrameSample[];
   readonly algorithms: readonly AlgorithmTelemetry[];
   readonly averageFps: number;
+  readonly p95FrameMs: number;
+  readonly averageRenderMs: number;
+  readonly droppedFrameRatio: number;
   readonly peakHeapMb: number;
 }
 
@@ -64,11 +67,21 @@ export class TelemetryEngine {
   snapshot(): TelemetrySnapshot {
     const averageFps =
       this.frames.length > 0 ? this.frames.reduce((sum, frame) => sum + frame.fps, 0) / this.frames.length : 0;
+    const averageRenderMs =
+      this.frames.length > 0 ? this.frames.reduce((sum, frame) => sum + frame.renderMs, 0) / this.frames.length : 0;
+    const sortedFrameTimes = [...this.frames].map((frame) => frame.deltaMs).sort((a, b) => a - b);
+    const p95Index = Math.max(0, Math.ceil(sortedFrameTimes.length * 0.95) - 1);
+    const p95FrameMs = sortedFrameTimes[p95Index] ?? 0;
+    const droppedFrameRatio =
+      this.frames.length > 0 ? this.frames.filter((frame) => frame.deltaMs > 22).length / this.frames.length : 0;
     const peakHeapMb = this.frames.reduce((max, frame) => Math.max(max, frame.heapMb), 0);
     return {
       frames: [...this.frames],
       algorithms: [...this.algorithms.values()].sort((a, b) => b.efficiencyScore - a.efficiencyScore),
       averageFps,
+      p95FrameMs,
+      averageRenderMs,
+      droppedFrameRatio,
       peakHeapMb
     };
   }

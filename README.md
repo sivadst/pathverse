@@ -42,6 +42,17 @@ git push origin main
 - `components/command-center/*` and `app/*` expose the operating surface.
 - `tests/engine/*` validates the heap, pathfinders, and battle orchestrator.
 
+## Phase 1.5 Cinematic Rendering Evolution
+
+- **GPU particles:** `GpuParticleEngine` uses Pixi's particle container path for batched event sparks.
+- **Neon trails:** `NeonTrailSystem` draws algorithm motion trails without involving React in the render loop.
+- **Glow pipeline:** Pixi blur filtering is applied once to the glow layer for a bloom-style pass.
+- **CRT overlay:** the renderer owns scanline and viewport border effects inside the Pixi scene.
+- **Adaptive quality:** `AdaptiveRenderQuality` responds to FPS, render time, and dropped-frame ratio.
+- **Split-screen races:** `renderBattleGrid` creates synchronized lanes for the top battle contestants.
+- **Race scheduler:** `RaceScheduler` advances all algorithm event streams on the same animation clock.
+- **HUD diagnostics:** frame p95, render timing, dropped-frame ratio, particles, quality mode, lanes, and sprites are visible in the command center.
+
 ## Next Phases
 
 1. FastAPI backend with async repository/service architecture.

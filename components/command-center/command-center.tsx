@@ -1,10 +1,11 @@
 "use client";
 
-import { Activity, Cpu, Gauge, Orbit, Play, RadioTower, Route, Shield, Zap } from "lucide-react";
+import { Activity, Cpu, Gauge, Layers3, Orbit, Play, RadioTower, Route, Shield, Sparkles, Zap } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimationScheduler } from "@engine/scheduler/animation-scheduler";
 import { PixiGridRenderer } from "@engine/rendering/pixi-grid-renderer";
+import { RaceScheduler } from "@engine/scheduler/race-scheduler";
 import {
   commandCenterAlgorithms,
   commandCenterTelemetry,
@@ -25,9 +26,16 @@ export function CommandCenter() {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<PixiGridRenderer | null>(null);
   const schedulerRef = useRef<AnimationScheduler | null>(null);
+  const raceSchedulerRef = useRef<RaceScheduler | null>(null);
   const [booted, setBooted] = useState(false);
-  const [rendererStats, setRendererStats] = useState({ drawCalls: 0, activeSprites: 0 });
-  const { grid, selectedAlgorithm, battle, events, learning, telemetry, selectAlgorithm, runBattle } =
+  const [rendererStats, setRendererStats] = useState({
+    drawCalls: 0,
+    activeSprites: 0,
+    activeParticles: 0,
+    qualityMode: "cinematic",
+    splitScreenLanes: 1
+  });
+  const { grid, selectedAlgorithm, battle, events, learning, telemetry, selectAlgorithm, runBattle, refreshTelemetry } =
     useCommandCenterStore();
 
   useEffect(() => {
@@ -43,21 +51,47 @@ export function CommandCenter() {
 
     schedulerRef.current = new AnimationScheduler(commandCenterTelemetry, (batch) => {
       renderer.applyEvents(batch);
+      renderer.updateQuality(commandCenterTelemetry.snapshot());
       setRendererStats(renderer.diagnostics());
+      refreshTelemetry();
+    });
+    raceSchedulerRef.current = new RaceScheduler(commandCenterTelemetry, (batches) => {
+      renderer.applyRaceEvents(batches);
+      renderer.updateQuality(commandCenterTelemetry.snapshot());
+      setRendererStats(renderer.diagnostics());
+      refreshTelemetry();
     });
 
     return () => {
       schedulerRef.current?.stop();
+      raceSchedulerRef.current?.stop();
       renderer.destroy();
     };
-  }, [grid]);
+  }, [grid, refreshTelemetry]);
 
   useEffect(() => {
     if (!booted || events.length === 0) return;
+    schedulerRef.current?.stop();
+    raceSchedulerRef.current?.stop();
+
+    if (battle) {
+      rendererRef.current?.renderBattleGrid(grid, battle);
+      raceSchedulerRef.current?.load(
+        battle.contestants.slice(0, 4).map((contestant, lane) => ({
+          algorithm: contestant.algorithm,
+          lane,
+          events: contestant.result.events
+        })),
+        1.25
+      );
+      raceSchedulerRef.current?.start();
+      return;
+    }
+
     rendererRef.current?.renderGrid(grid);
     schedulerRef.current?.load(events, 1.3);
     schedulerRef.current?.start();
-  }, [booted, events, grid]);
+  }, [battle, booted, events, grid]);
 
   const selectedContestant = useMemo(
     () => battle?.contestants.find((contestant) => contestant.algorithm === selectedAlgorithm),
@@ -74,8 +108,8 @@ export function CommandCenter() {
           <MetricStrip
             items={[
               { icon: Gauge, label: "AVG FPS", value: telemetry.averageFps.toFixed(1) },
-              { icon: Cpu, label: "HEAP MB", value: telemetry.peakHeapMb.toFixed(1) },
-              { icon: Zap, label: "DRAW OPS", value: rendererStats.drawCalls.toString() }
+              { icon: Cpu, label: "P95 MS", value: telemetry.p95FrameMs.toFixed(1) },
+              { icon: Zap, label: "RENDER", value: telemetry.averageRenderMs.toFixed(1) }
             ]}
           />
         </aside>
@@ -89,23 +123,49 @@ export function CommandCenter() {
           <div className="absolute bottom-4 left-4 right-4 grid gap-3 md:grid-cols-3">
             <StatusTile icon={Route} label="Winner" value={battle ? labels[battle.winner.algorithm] : "Standby"} />
             <StatusTile icon={Activity} label="Path Cost" value={selectedContestant?.result.metrics.pathCost.toFixed(0) ?? "--"} />
-            <StatusTile icon={RadioTower} label="Events" value={events.length.toString()} />
+            <StatusTile icon={RadioTower} label="Race Events" value={battle ? battle.contestants.reduce((sum, contestant) => sum + contestant.result.events.length, 0).toString() : events.length.toString()} />
           </div>
         </section>
 
         <aside className="hud-panel z-10 flex flex-col gap-4 rounded-lg p-4">
           <TelemetryPanel />
+          <RenderDiagnosticsPanel stats={rendererStats} droppedFrameRatio={telemetry.droppedFrameRatio} />
           <LearningPanel epochs={learning.epochs.slice(-18)} confidence={learning.confidence} />
           <MetricStrip
             items={[
               { icon: Orbit, label: "SPRITES", value: rendererStats.activeSprites.toString() },
-              { icon: Shield, label: "CONF", value: `${Math.round(learning.confidence * 100)}%` },
-              { icon: Activity, label: "NODES", value: selectedContestant?.result.metrics.visitedNodes.toString() ?? "--" }
+              { icon: Sparkles, label: "PARTICLES", value: rendererStats.activeParticles.toString() },
+              { icon: Layers3, label: "LANES", value: rendererStats.splitScreenLanes.toString() }
             ]}
           />
         </aside>
       </section>
     </main>
+  );
+}
+
+function RenderDiagnosticsPanel({
+  stats,
+  droppedFrameRatio
+}: {
+  readonly stats: {
+    readonly drawCalls: number;
+    readonly activeParticles: number;
+    readonly qualityMode: string;
+    readonly splitScreenLanes: number;
+  };
+  readonly droppedFrameRatio: number;
+}) {
+  return (
+    <div>
+      <div className="font-mono text-xs uppercase tracking-[0.2em] text-plasma">Render Pipeline</div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <StatusTile icon={Shield} label="Quality" value={stats.qualityMode.toUpperCase()} compact />
+        <StatusTile icon={Layers3} label="Split" value={`${stats.splitScreenLanes}x`} compact />
+        <StatusTile icon={Sparkles} label="GPU FX" value={stats.activeParticles.toString()} compact />
+        <StatusTile icon={Gauge} label="Drops" value={`${Math.round(droppedFrameRatio * 100)}%`} compact />
+      </div>
+    </div>
   );
 }
 

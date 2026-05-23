@@ -18,6 +18,7 @@ interface CommandCenterState {
   selectAlgorithm: (algorithm: AlgorithmId) => void;
   runBattle: () => void;
   ingestEvents: (events: readonly PathfinderEvent[]) => void;
+  refreshTelemetry: () => void;
 }
 
 const createMissionGrid = (): GridModel => {
@@ -52,7 +53,8 @@ export const useCommandCenterStore = create<CommandCenterState>((set, get) => ({
     set((state) => ({
       events: [...state.events, ...events],
       telemetry: telemetryEngine.snapshot()
-    }))
+    })),
+  refreshTelemetry: () => set({ telemetry: telemetryEngine.snapshot() })
 }));
 
 export const commandCenterAlgorithms = PATHFINDERS;
