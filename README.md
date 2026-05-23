@@ -53,6 +53,16 @@ git push origin main
 - **Race scheduler:** `RaceScheduler` advances all algorithm event streams on the same animation clock.
 - **HUD diagnostics:** frame p95, render timing, dropped-frame ratio, particles, quality mode, lanes, and sprites are visible in the command center.
 
+## Phase 2 Neural Intelligence Evolution
+
+- **Neural learning engine:** `NeuralLearningEngine` adds state-action Q memory, exploration/exploitation, reward adaptation, obstacle memory, confidence scoring, convergence tracking, and best-path prediction.
+- **Neural memory:** `NeuralMemoryStore` persists learned Q-values, visits, rewards, obstacle memory, failures, and best path snapshots in browser storage.
+- **Live cognition rendering:** `NeuralVisualizationLayer` renders confidence heatmaps, reward gradients, prediction fields, reward propagation waves, and future-path estimation inside the Pixi renderer.
+- **Swarm intelligence:** `SwarmIntelligenceSystem` simulates multiple communicating agents with collision avoidance, formation scoring, and distributed routing behavior.
+- **Enterprise AI telemetry:** telemetry now includes neural confidence, convergence, memory size, reward trend, prediction cells, swarm signal count, formation score, and collision risk.
+- **Command center OS:** the UI adds a cinematic boot console, trainable neural core controls, neural diagnostics, swarm diagnostics, and a draggable holographic operations panel.
+- **Camera foundation:** `CinematicCameraController` provides tactical/focus/replay camera state for future world-scale simulation and replay flyovers.
+
 ## Next Phases
 
 1. FastAPI backend with async repository/service architecture.

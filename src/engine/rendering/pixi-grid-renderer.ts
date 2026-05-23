@@ -3,7 +3,10 @@ import type { AlgorithmId, BattleResult, GridModel, GridPosition, PathfinderEven
 import { CrtOverlay } from "./crt-overlay";
 import { GpuParticleEngine } from "./gpu-particle-engine";
 import { NeonTrailSystem } from "./neon-trail-system";
+import { NeuralVisualizationLayer } from "./neural-visualization";
 import { AdaptiveRenderQuality, type RenderQualityMode, type RenderQualityProfile } from "./render-quality";
+import type { NeuralLearningSnapshot } from "../ai/neural-learning-engine";
+import type { SwarmSnapshot } from "../ai/swarm-intelligence";
 
 export interface RendererDiagnostics {
   readonly drawCalls: number;
@@ -61,10 +64,15 @@ export class PixiGridRenderer {
   private readonly bloomFilter = new BlurFilter({ strength: 3, quality: 3, resolution: 0.55 });
   private readonly particleEngine = new GpuParticleEngine(this.quality.current);
   private readonly trailSystem = new NeonTrailSystem(this.quality.current);
+  private readonly neuralLayer: NeuralVisualizationLayer;
   private grid: GridModel | undefined;
   private layouts: readonly ViewportLayout[] = [];
   private cellSize = 12;
   private drawCalls = 0;
+
+  constructor() {
+    this.neuralLayer = new NeuralVisualizationLayer(this.projectNeuralPosition);
+  }
 
   async mount(host: HTMLElement, options: PixiGridRendererOptions = {}): Promise<void> {
     this.destroy();
@@ -82,6 +90,7 @@ export class PixiGridRenderer {
     this.world.sortableChildren = false;
     this.glowLayer.filters = [this.bloomFilter];
     this.glowLayer.addChild(this.eventLayer);
+    this.glowLayer.addChild(this.neuralLayer.container);
     this.glowLayer.addChild(this.trailSystem.container);
     this.particleEngine.attach(this.glowLayer);
     this.world.addChild(this.baseLayer, this.glowLayer, this.hudLayer, this.crtOverlay.container);
@@ -99,6 +108,7 @@ export class PixiGridRenderer {
     this.hudLayer.removeChildren();
     this.trailSystem.clear();
     this.particleEngine.clear();
+    this.neuralLayer.clear();
     this.drawCalls = 0;
 
     const viewportWidth = this.app.renderer.width / this.app.renderer.resolution;
@@ -118,6 +128,7 @@ export class PixiGridRenderer {
     this.hudLayer.removeChildren();
     this.trailSystem.clear();
     this.particleEngine.clear();
+    this.neuralLayer.clear();
     this.drawCalls = 0;
 
     const viewportWidth = this.app.renderer.width / this.app.renderer.resolution;
@@ -180,6 +191,14 @@ export class PixiGridRenderer {
     })));
   }
 
+  renderNeuralSnapshot(snapshot: NeuralLearningSnapshot, lane = 0): void {
+    this.neuralLayer.setNeuralSnapshot(snapshot, lane);
+  }
+
+  renderSwarmSnapshot(snapshot: SwarmSnapshot): void {
+    this.neuralLayer.setSwarmSnapshot(snapshot);
+  }
+
   diagnostics(): RendererDiagnostics {
     const renderer = this.app?.renderer;
     return {
@@ -201,6 +220,7 @@ export class PixiGridRenderer {
     this.hudLayer.removeChildren();
     this.trailSystem.clear();
     this.particleEngine.clear();
+    this.neuralLayer.clear();
   }
 
   setQuality(profile: RenderQualityProfile): void {
@@ -217,6 +237,7 @@ export class PixiGridRenderer {
   private updateEffects(deltaMs: number): void {
     this.trailSystem.update(deltaMs);
     this.particleEngine.update(deltaMs);
+    this.neuralLayer.update(deltaMs);
   }
 
   private createLayout(
@@ -273,6 +294,19 @@ export class PixiGridRenderer {
     return {
       x: layout.x + position.x * layout.cellSize + layout.cellSize / 2,
       y: layout.y + position.y * layout.cellSize + layout.cellSize / 2
+    };
+  };
+
+  private readonly projectNeuralPosition = (
+    position: GridPosition,
+    lane: number
+  ): { readonly x: number; readonly y: number; readonly cellSize: number } => {
+    const layout = this.layouts[lane] ?? this.layouts[0];
+    if (!layout) return { x: 0, y: 0, cellSize: 1 };
+    return {
+      x: layout.x + position.x * layout.cellSize + layout.cellSize / 2,
+      y: layout.y + position.y * layout.cellSize + layout.cellSize / 2,
+      cellSize: layout.cellSize
     };
   };
 

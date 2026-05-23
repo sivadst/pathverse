@@ -6,6 +6,8 @@ import { BattleOrchestrator } from "../battle/battle-orchestrator";
 import { createGrid } from "../core/grid";
 import type { AlgorithmId, BattleResult, GridModel, PathfinderEvent } from "../core/types";
 import { LearningAgent, type LearningSnapshot } from "../ai/learning-agent";
+import { NeuralMemoryStore } from "../ai/neural-memory";
+import { SwarmIntelligenceSystem, type SwarmSnapshot } from "../ai/swarm-intelligence";
 import { TelemetryEngine, type TelemetrySnapshot } from "../telemetry/telemetry-engine";
 
 interface CommandCenterState {
@@ -14,9 +16,12 @@ interface CommandCenterState {
   readonly battle: BattleResult | undefined;
   readonly events: readonly PathfinderEvent[];
   readonly learning: LearningSnapshot;
+  readonly swarm: SwarmSnapshot;
   readonly telemetry: TelemetrySnapshot;
   selectAlgorithm: (algorithm: AlgorithmId) => void;
   runBattle: () => void;
+  trainNeural: (epochs?: number) => void;
+  stepSwarm: () => void;
   ingestEvents: (events: readonly PathfinderEvent[]) => void;
   refreshTelemetry: () => void;
 }
@@ -35,19 +40,37 @@ const telemetryEngine = new TelemetryEngine();
 const battleOrchestrator = new BattleOrchestrator();
 const learningAgent = new LearningAgent();
 const missionGrid = createMissionGrid();
+const memoryStore = new NeuralMemoryStore();
+const swarmSystem = new SwarmIntelligenceSystem(missionGrid);
+const initialLearning = learningAgent.train(missionGrid, 52);
+telemetryEngine.recordNeural(initialLearning.neural);
+const initialSwarm = swarmSystem.step(missionGrid, initialLearning.neural);
+telemetryEngine.recordSwarm(initialSwarm);
 
 export const useCommandCenterStore = create<CommandCenterState>((set, get) => ({
   grid: missionGrid,
   selectedAlgorithm: "astar",
   battle: undefined,
   events: [],
-  learning: learningAgent.train(missionGrid, 36),
+  learning: initialLearning,
+  swarm: initialSwarm,
   telemetry: telemetryEngine.snapshot(),
   selectAlgorithm: (algorithm) => set({ selectedAlgorithm: algorithm }),
   runBattle: () => {
     const battle = battleOrchestrator.run(get().grid, { algorithms: PATHFINDERS, telemetry: telemetryEngine });
     const selected = battle.contestants.find((contestant) => contestant.algorithm === get().selectedAlgorithm) ?? battle.winner;
     set({ battle, events: selected.result.events, telemetry: telemetryEngine.snapshot() });
+  },
+  trainNeural: (epochs = 18) => {
+    const learning = learningAgent.train(get().grid, epochs);
+    memoryStore.save(learning.neural.memory);
+    telemetryEngine.recordNeural(learning.neural);
+    set({ learning, telemetry: telemetryEngine.snapshot() });
+  },
+  stepSwarm: () => {
+    const swarm = swarmSystem.step(get().grid, get().learning.neural);
+    telemetryEngine.recordSwarm(swarm);
+    set({ swarm, telemetry: telemetryEngine.snapshot() });
   },
   ingestEvents: (events) =>
     set((state) => ({

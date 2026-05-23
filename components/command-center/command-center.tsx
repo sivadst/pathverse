@@ -1,8 +1,25 @@
 "use client";
 
-import { Activity, Cpu, Gauge, Layers3, Orbit, Play, RadioTower, Route, Shield, Sparkles, Zap } from "lucide-react";
+import {
+  Activity,
+  Brain,
+  Cpu,
+  Database,
+  Gauge,
+  Layers3,
+  Move,
+  Network,
+  Orbit,
+  Play,
+  RadioTower,
+  Route,
+  Shield,
+  Sparkles,
+  Terminal,
+  Zap
+} from "lucide-react";
 import { motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimationScheduler } from "@engine/scheduler/animation-scheduler";
 import { PixiGridRenderer } from "@engine/rendering/pixi-grid-renderer";
 import { RaceScheduler } from "@engine/scheduler/race-scheduler";
@@ -22,6 +39,14 @@ const labels: Record<AlgorithmId, string> = {
   bidirectional: "Bi-Search"
 };
 
+const bootLogs = [
+  "INITIALIZING PATHVERSE OS",
+  "GPU LINK ESTABLISHED",
+  "NEURAL ROUTING ENGINE ONLINE",
+  "SWARM INTELLIGENCE ACTIVE",
+  "SIMULATION MATRIX SYNCHRONIZED"
+];
+
 export function CommandCenter() {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<PixiGridRenderer | null>(null);
@@ -35,8 +60,25 @@ export function CommandCenter() {
     qualityMode: "cinematic",
     splitScreenLanes: 1
   });
-  const { grid, selectedAlgorithm, battle, events, learning, telemetry, selectAlgorithm, runBattle, refreshTelemetry } =
+  const {
+    grid,
+    selectedAlgorithm,
+    battle,
+    events,
+    learning,
+    swarm,
+    telemetry,
+    selectAlgorithm,
+    runBattle,
+    trainNeural,
+    stepSwarm,
+    refreshTelemetry
+  } =
     useCommandCenterStore();
+  const neuralRef = useRef(learning.neural);
+  const swarmRef = useRef(swarm);
+  const [bootComplete, setBootComplete] = useState(false);
+  const completeBoot = useCallback(() => setBootComplete(true), []);
 
   useEffect(() => {
     const renderer = new PixiGridRenderer();
@@ -70,12 +112,31 @@ export function CommandCenter() {
   }, [grid, refreshTelemetry]);
 
   useEffect(() => {
+    neuralRef.current = learning.neural;
+    rendererRef.current?.renderNeuralSnapshot(learning.neural);
+  }, [learning.neural]);
+
+  useEffect(() => {
+    swarmRef.current = swarm;
+    rendererRef.current?.renderSwarmSnapshot(swarm);
+  }, [swarm]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      stepSwarm();
+    }, 900);
+    return () => window.clearInterval(interval);
+  }, [stepSwarm]);
+
+  useEffect(() => {
     if (!booted || events.length === 0) return;
     schedulerRef.current?.stop();
     raceSchedulerRef.current?.stop();
 
     if (battle) {
       rendererRef.current?.renderBattleGrid(grid, battle);
+      rendererRef.current?.renderNeuralSnapshot(neuralRef.current);
+      rendererRef.current?.renderSwarmSnapshot(swarmRef.current);
       raceSchedulerRef.current?.load(
         battle.contestants.slice(0, 4).map((contestant, lane) => ({
           algorithm: contestant.algorithm,
@@ -89,6 +150,8 @@ export function CommandCenter() {
     }
 
     rendererRef.current?.renderGrid(grid);
+    rendererRef.current?.renderNeuralSnapshot(neuralRef.current);
+    rendererRef.current?.renderSwarmSnapshot(swarmRef.current);
     schedulerRef.current?.load(events, 1.3);
     schedulerRef.current?.start();
   }, [battle, booted, events, grid]);
@@ -100,11 +163,12 @@ export function CommandCenter() {
 
   return (
     <main className="scanlines relative min-h-screen overflow-hidden px-4 py-4 text-slate-100 md:px-6">
+      {!bootComplete && <BootSequence onComplete={completeBoot} />}
       <div className="absolute inset-0 bg-[linear-gradient(rgba(24,245,210,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(24,245,210,0.06)_1px,transparent_1px)] bg-[size:48px_48px] opacity-30" />
       <section className="relative grid min-h-[calc(100vh-2rem)] grid-cols-1 gap-4 xl:grid-cols-[310px_1fr_330px]">
         <aside className="hud-panel z-10 flex flex-col gap-4 rounded-lg p-4">
           <SystemHeader booted={booted} />
-          <AlgorithmDock selected={selectedAlgorithm} onSelect={selectAlgorithm} onRun={runBattle} />
+          <AlgorithmDock selected={selectedAlgorithm} onSelect={selectAlgorithm} onRun={runBattle} onTrain={() => trainNeural(24)} />
           <MetricStrip
             items={[
               { icon: Gauge, label: "AVG FPS", value: telemetry.averageFps.toFixed(1) },
@@ -130,6 +194,7 @@ export function CommandCenter() {
         <aside className="hud-panel z-10 flex flex-col gap-4 rounded-lg p-4">
           <TelemetryPanel />
           <RenderDiagnosticsPanel stats={rendererStats} droppedFrameRatio={telemetry.droppedFrameRatio} />
+          <NeuralDiagnosticsPanel />
           <LearningPanel epochs={learning.epochs.slice(-18)} confidence={learning.confidence} />
           <MetricStrip
             items={[
@@ -140,7 +205,58 @@ export function CommandCenter() {
           />
         </aside>
       </section>
+      <DraggableHudPanel title="NEURAL OPS" initial={{ x: 28, y: 96 }}>
+        <div className="grid grid-cols-2 gap-2">
+          <StatusTile icon={Brain} label="Confidence" value={`${Math.round(learning.neural.confidence * 100)}%`} compact />
+          <StatusTile icon={Database} label="Memory" value={(telemetry.neural?.memoryEntries ?? 0).toString()} compact />
+          <StatusTile icon={Network} label="Swarm" value={`${Math.round(swarm.formationScore * 100)}%`} compact />
+          <StatusTile icon={Shield} label="Risk" value={`${Math.round(swarm.collisionRisk * 100)}%`} compact />
+        </div>
+      </DraggableHudPanel>
     </main>
+  );
+}
+
+function BootSequence({ onComplete }: { readonly onComplete: () => void }) {
+  const [line, setLine] = useState(0);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setLine((current) => {
+        if (current >= bootLogs.length) {
+          window.clearInterval(interval);
+          window.setTimeout(onComplete, 360);
+          return current;
+        }
+        return current + 1;
+      });
+    }, 360);
+    return () => window.clearInterval(interval);
+  }, [onComplete]);
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-void/95"
+      initial={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <div className="w-[min(620px,calc(100vw-2rem))] border border-plasma/30 bg-black/40 p-6 shadow-hud">
+        <div className="flex items-center gap-3 font-mono text-xs uppercase tracking-[0.24em] text-plasma">
+          <Terminal size={16} />
+          PATHVERSE BOOT CONSOLE
+        </div>
+        <div className="mt-6 grid gap-3 font-mono text-sm">
+          {bootLogs.slice(0, line).map((entry) => (
+            <motion.div key={entry} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} className="text-slate-200">
+              {entry}...
+            </motion.div>
+          ))}
+        </div>
+        <div className="mt-6 h-1 overflow-hidden bg-white/10">
+          <motion.div className="h-full bg-plasma" animate={{ width: `${Math.min(100, (line / bootLogs.length) * 100)}%` }} />
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -169,6 +285,23 @@ function RenderDiagnosticsPanel({
   );
 }
 
+function NeuralDiagnosticsPanel() {
+  const telemetry = useCommandCenterStore((state) => state.telemetry);
+  const neural = telemetry.neural;
+  const swarm = telemetry.swarm;
+  return (
+    <div>
+      <div className="font-mono text-xs uppercase tracking-[0.2em] text-reactor">Neural Diagnostics</div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <StatusTile icon={Brain} label="Converge" value={`${Math.round((neural?.convergence ?? 0) * 100)}%`} compact />
+        <StatusTile icon={Database} label="Memory" value={(neural?.memoryEntries ?? 0).toString()} compact />
+        <StatusTile icon={Activity} label="Reward" value={(neural?.rewardTrend ?? 0).toFixed(0)} compact />
+        <StatusTile icon={Network} label="Signals" value={(swarm?.signalCount ?? 0).toString()} compact />
+      </div>
+    </div>
+  );
+}
+
 function SystemHeader({ booted }: { readonly booted: boolean }) {
   return (
     <div>
@@ -186,11 +319,13 @@ function SystemHeader({ booted }: { readonly booted: boolean }) {
 function AlgorithmDock({
   selected,
   onSelect,
-  onRun
+  onRun,
+  onTrain
 }: {
   readonly selected: AlgorithmId;
   readonly onSelect: (algorithm: AlgorithmId) => void;
   readonly onRun: () => void;
+  readonly onTrain: () => void;
 }) {
   return (
     <div className="grid gap-3">
@@ -201,6 +336,14 @@ function AlgorithmDock({
       >
         <Play size={16} />
         Run Battle
+      </button>
+      <button
+        type="button"
+        onClick={onTrain}
+        className="flex h-10 items-center justify-center gap-2 rounded-md border border-reactor/40 bg-reactor/10 font-mono text-xs uppercase text-reactor transition hover:bg-reactor/20"
+      >
+        <Brain size={15} />
+        Train Neural Core
       </button>
       <div className="grid grid-cols-2 gap-2">
         {commandCenterAlgorithms.map((algorithm) => (
@@ -218,6 +361,42 @@ function AlgorithmDock({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function DraggableHudPanel({
+  title,
+  initial,
+  children
+}: {
+  readonly title: string;
+  readonly initial: { readonly x: number; readonly y: number };
+  readonly children: React.ReactNode;
+}) {
+  const [position, setPosition] = useState(initial);
+  const dragOffset = useRef({ x: 0, y: 0 });
+
+  return (
+    <div
+      className="hud-panel absolute z-20 hidden w-72 rounded-lg p-3 xl:block"
+      style={{ left: position.x, top: position.y }}
+      onPointerMove={(event) => {
+        if (event.buttons !== 1) return;
+        setPosition({ x: event.clientX - dragOffset.current.x, y: event.clientY - dragOffset.current.y });
+      }}
+    >
+      <div
+        className="mb-3 flex cursor-move items-center gap-2 font-mono text-xs uppercase tracking-[0.18em] text-plasma"
+        onPointerDown={(event) => {
+          dragOffset.current = { x: event.clientX - position.x, y: event.clientY - position.y };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+      >
+        <Move size={13} />
+        {title}
+      </div>
+      {children}
     </div>
   );
 }

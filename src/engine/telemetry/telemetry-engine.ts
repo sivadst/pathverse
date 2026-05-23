@@ -1,4 +1,6 @@
 import type { AlgorithmId, PathfinderMetrics } from "../core/types";
+import type { NeuralLearningSnapshot } from "../ai/neural-learning-engine";
+import type { SwarmSnapshot } from "../ai/swarm-intelligence";
 
 export interface FrameSample {
   readonly frame: number;
@@ -23,12 +25,33 @@ export interface TelemetrySnapshot {
   readonly averageRenderMs: number;
   readonly droppedFrameRatio: number;
   readonly peakHeapMb: number;
+  readonly neural?: NeuralTelemetry;
+  readonly swarm?: SwarmTelemetry;
+}
+
+export interface NeuralTelemetry {
+  readonly confidence: number;
+  readonly convergence: number;
+  readonly memoryEntries: number;
+  readonly rewardTrend: number;
+  readonly failureCount: number;
+  readonly predictionCells: number;
+  readonly bestPathLength: number;
+}
+
+export interface SwarmTelemetry {
+  readonly agentCount: number;
+  readonly signalCount: number;
+  readonly formationScore: number;
+  readonly collisionRisk: number;
 }
 
 export class TelemetryEngine {
   private readonly maxFrames: number;
   private readonly frames: FrameSample[] = [];
   private readonly algorithms = new Map<AlgorithmId, AlgorithmTelemetry>();
+  private neural: NeuralTelemetry | undefined;
+  private swarm: SwarmTelemetry | undefined;
   private frameCounter = 0;
 
   constructor(maxFrames = 240) {
@@ -64,6 +87,37 @@ export class TelemetryEngine {
     return telemetry;
   }
 
+  recordNeural(snapshot: NeuralLearningSnapshot): NeuralTelemetry {
+    const recent = snapshot.epochs.slice(-8);
+    const rewardTrend =
+      recent.length > 1 ? (recent.at(-1)?.reward ?? 0) - (recent[0]?.reward ?? 0) : recent[0]?.reward ?? 0;
+    const memoryEntries =
+      snapshot.memory.qValues.size +
+      snapshot.memory.visits.size +
+      snapshot.memory.rewardMemory.size +
+      snapshot.memory.obstacleMemory.size;
+    this.neural = {
+      confidence: snapshot.confidence,
+      convergence: snapshot.convergence,
+      memoryEntries,
+      rewardTrend,
+      failureCount: snapshot.memory.failures,
+      predictionCells: snapshot.predictionField.length,
+      bestPathLength: snapshot.bestPath.length
+    };
+    return this.neural;
+  }
+
+  recordSwarm(snapshot: SwarmSnapshot): SwarmTelemetry {
+    this.swarm = {
+      agentCount: snapshot.agents.length,
+      signalCount: snapshot.signals.length,
+      formationScore: snapshot.formationScore,
+      collisionRisk: snapshot.collisionRisk
+    };
+    return this.swarm;
+  }
+
   snapshot(): TelemetrySnapshot {
     const averageFps =
       this.frames.length > 0 ? this.frames.reduce((sum, frame) => sum + frame.fps, 0) / this.frames.length : 0;
@@ -75,7 +129,7 @@ export class TelemetryEngine {
     const droppedFrameRatio =
       this.frames.length > 0 ? this.frames.filter((frame) => frame.deltaMs > 22).length / this.frames.length : 0;
     const peakHeapMb = this.frames.reduce((max, frame) => Math.max(max, frame.heapMb), 0);
-    return {
+    const snapshot = {
       frames: [...this.frames],
       algorithms: [...this.algorithms.values()].sort((a, b) => b.efficiencyScore - a.efficiencyScore),
       averageFps,
@@ -84,11 +138,18 @@ export class TelemetryEngine {
       droppedFrameRatio,
       peakHeapMb
     };
+    return {
+      ...snapshot,
+      ...(this.neural ? { neural: this.neural } : {}),
+      ...(this.swarm ? { swarm: this.swarm } : {})
+    };
   }
 
   reset(): void {
     this.frames.length = 0;
     this.algorithms.clear();
+    this.neural = undefined;
+    this.swarm = undefined;
     this.frameCounter = 0;
   }
 
