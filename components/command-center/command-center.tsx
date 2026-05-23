@@ -74,6 +74,8 @@ export function CommandCenter() {
     warfare,
     prediction,
     personality,
+    thought,
+    temporalMemory,
     shell,
     telemetry,
     selectAlgorithm,
@@ -135,6 +137,10 @@ export function CommandCenter() {
     civilizationRef.current = { civilization, megacity, warfare, prediction };
     rendererRef.current?.renderCivilizationSnapshot(civilization, megacity, prediction, warfare);
   }, [civilization, megacity, prediction, warfare]);
+
+  useEffect(() => {
+    rendererRef.current?.renderThoughtSnapshot(thought);
+  }, [thought]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -229,6 +235,7 @@ export function CommandCenter() {
           <RenderDiagnosticsPanel stats={rendererStats} droppedFrameRatio={telemetry.droppedFrameRatio} />
           <NeuralDiagnosticsPanel />
           <CivilizationPanel />
+          <ConsciousnessPanel />
           <LearningPanel epochs={learning.epochs.slice(-18)} confidence={learning.confidence} />
           <MetricStrip
             items={[
@@ -356,6 +363,23 @@ function CivilizationPanel() {
         <StatusTile icon={Network} label="Drones" value={(civilization?.droneRoutes ?? 0).toString()} compact />
         <StatusTile icon={Shield} label="Conflict" value={`${Math.round((civilization?.strategicTension ?? 0) * 100)}%`} compact />
         <StatusTile icon={Waypoints} label="Branches" value={(civilization?.timelineBranches ?? 0).toString()} compact />
+      </div>
+    </div>
+  );
+}
+
+function ConsciousnessPanel() {
+  const telemetry = useCommandCenterStore((state) => state.telemetry);
+  const consciousness = telemetry.consciousness;
+  const temporalMemory = telemetry.temporalMemory;
+  return (
+    <div>
+      <div className="font-mono text-xs uppercase tracking-[0.2em] text-plasma">Consciousness Telemetry</div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <StatusTile icon={Brain} label="Reason" value={`${Math.round((consciousness?.reasoningIntensity ?? 0) * 100)}%`} compact />
+        <StatusTile icon={Gauge} label="Uncertainty" value={`${Math.round((consciousness?.uncertaintyIndex ?? 0) * 100)}%`} compact />
+        <StatusTile icon={Activity} label="Pulses" value={(consciousness?.thoughtPulseCount ?? 0).toString()} compact />
+        <StatusTile icon={Database} label="Memory" value={(temporalMemory?.totalEvents ?? 0).toString()} compact />
       </div>
     </div>
   );

@@ -13,6 +13,8 @@ import { FactionWarfareEngine, type WarfareSnapshot } from "../civilization/fact
 import { MegacitySimulation, type MegacitySnapshot } from "../civilization/megacity-simulation";
 import { MultiversePredictionEngine, type MultiversePredictionSnapshot } from "../civilization/multiverse-prediction";
 import { PersonalityMatrix, type PersonalityMatrixSnapshot } from "../civilization/personality-matrix";
+import { TemporalMemoryEngine, TemporalMemoryStore, type TemporalMemorySnapshot } from "../civilization/temporal-memory-engine";
+import { ThoughtStreamEngine, type ThoughtStreamSnapshot } from "../ai/thought-stream-engine";
 import { TelemetryEngine, type TelemetrySnapshot } from "../telemetry/telemetry-engine";
 
 export interface CommandShellEntry {
@@ -34,6 +36,8 @@ interface CommandCenterState {
   readonly warfare: WarfareSnapshot;
   readonly prediction: MultiversePredictionSnapshot;
   readonly personality: PersonalityMatrixSnapshot;
+  readonly thought: ThoughtStreamSnapshot;
+  readonly temporalMemory: TemporalMemorySnapshot;
   readonly shell: readonly CommandShellEntry[];
   readonly telemetry: TelemetrySnapshot;
   selectAlgorithm: (algorithm: AlgorithmId) => void;
@@ -67,6 +71,9 @@ const megacitySimulation = new MegacitySimulation(missionGrid);
 const warfareEngine = new FactionWarfareEngine();
 const predictionEngine = new MultiversePredictionEngine();
 const personalityMatrix = new PersonalityMatrix();
+const thoughtEngine = new ThoughtStreamEngine();
+const temporalMemoryEngine = new TemporalMemoryEngine();
+const temporalMemoryStore = new TemporalMemoryStore();
 const initialLearning = learningAgent.train(missionGrid, 52);
 telemetryEngine.recordNeural(initialLearning.neural);
 const initialSwarm = swarmSystem.step(missionGrid, initialLearning.neural);
@@ -76,7 +83,12 @@ const initialMegacity = megacitySimulation.step(initialCivilization);
 const initialWarfare = warfareEngine.step(initialCivilization);
 const initialPrediction = predictionEngine.forecast(initialCivilization, initialMegacity, initialWarfare);
 const initialPersonality = personalityMatrix.synthesize(initialCivilization, initialWarfare, initialPrediction);
+const initialThought = thoughtEngine.step(initialLearning.neural, initialCivilization);
+const initialTemporalMemory = temporalMemoryEngine.record(initialCivilization, initialWarfare);
 telemetryEngine.recordCivilization(initialCivilization, initialMegacity, initialWarfare, initialPrediction);
+telemetryEngine.recordConsciousness(initialThought);
+telemetryEngine.recordTemporalMemory(initialTemporalMemory);
+temporalMemoryStore.saveQuick(initialTemporalMemory);
 
 const createShellEntry = (command: string, output: string): CommandShellEntry => ({
   id: crypto.randomUUID(),
@@ -97,6 +109,8 @@ export const useCommandCenterStore = create<CommandCenterState>((set, get) => ({
   warfare: initialWarfare,
   prediction: initialPrediction,
   personality: initialPersonality,
+  thought: initialThought,
+  temporalMemory: initialTemporalMemory,
   shell: [
     createShellEntry("boot", "Civilization substrate synchronized. Megacity, faction, and multiverse systems online.")
   ],
@@ -125,9 +139,14 @@ export const useCommandCenterStore = create<CommandCenterState>((set, get) => ({
     const warfare = warfareEngine.step(civilization);
     const prediction = predictionEngine.forecast(civilization, megacity, warfare);
     const personality = personalityMatrix.synthesize(civilization, warfare, prediction);
+    const thought = thoughtEngine.step(get().learning.neural, civilization);
+    const temporalMemory = temporalMemoryEngine.record(civilization, warfare);
     telemetryEngine.recordSwarm(swarm);
     telemetryEngine.recordCivilization(civilization, megacity, warfare, prediction);
-    set({ swarm, civilization, megacity, warfare, prediction, personality, telemetry: telemetryEngine.snapshot() });
+    telemetryEngine.recordConsciousness(thought);
+    telemetryEngine.recordTemporalMemory(temporalMemory);
+    temporalMemoryStore.saveQuick(temporalMemory);
+    set({ swarm, civilization, megacity, warfare, prediction, personality, thought, temporalMemory, telemetry: telemetryEngine.snapshot() });
   },
   runCommand: (command) => {
     const normalized = command.trim().toLowerCase();
