@@ -1,6 +1,10 @@
 import type { AlgorithmId, PathfinderMetrics } from "../core/types";
 import type { NeuralLearningSnapshot } from "../ai/neural-learning-engine";
 import type { SwarmSnapshot } from "../ai/swarm-intelligence";
+import type { CivilizationSnapshot } from "../civilization/civilization-engine";
+import type { MegacitySnapshot } from "../civilization/megacity-simulation";
+import type { MultiversePredictionSnapshot } from "../civilization/multiverse-prediction";
+import type { WarfareSnapshot } from "../civilization/faction-warfare";
 
 export interface FrameSample {
   readonly frame: number;
@@ -27,6 +31,7 @@ export interface TelemetrySnapshot {
   readonly peakHeapMb: number;
   readonly neural?: NeuralTelemetry;
   readonly swarm?: SwarmTelemetry;
+  readonly civilization?: CivilizationTelemetry;
 }
 
 export interface NeuralTelemetry {
@@ -46,12 +51,28 @@ export interface SwarmTelemetry {
   readonly collisionRisk: number;
 }
 
+export interface CivilizationTelemetry {
+  readonly tick: number;
+  readonly totalPopulation: number;
+  readonly resourcePressure: number;
+  readonly collaborationIndex: number;
+  readonly conflictIndex: number;
+  readonly districts: number;
+  readonly droneRoutes: number;
+  readonly logisticsEfficiency: number;
+  readonly energyBalance: number;
+  readonly strategicTension: number;
+  readonly timelineBranches: number;
+  readonly futureConvergence: number;
+}
+
 export class TelemetryEngine {
   private readonly maxFrames: number;
   private readonly frames: FrameSample[] = [];
   private readonly algorithms = new Map<AlgorithmId, AlgorithmTelemetry>();
   private neural: NeuralTelemetry | undefined;
   private swarm: SwarmTelemetry | undefined;
+  private civilization: CivilizationTelemetry | undefined;
   private frameCounter = 0;
 
   constructor(maxFrames = 240) {
@@ -118,6 +139,29 @@ export class TelemetryEngine {
     return this.swarm;
   }
 
+  recordCivilization(
+    civilization: CivilizationSnapshot,
+    megacity: MegacitySnapshot,
+    warfare: WarfareSnapshot,
+    prediction: MultiversePredictionSnapshot
+  ): CivilizationTelemetry {
+    this.civilization = {
+      tick: civilization.tick,
+      totalPopulation: civilization.totalPopulation,
+      resourcePressure: civilization.resourcePressure,
+      collaborationIndex: civilization.collaborationIndex,
+      conflictIndex: civilization.conflictIndex,
+      districts: megacity.districts.length,
+      droneRoutes: megacity.droneRoutes.length,
+      logisticsEfficiency: megacity.logisticsEfficiency,
+      energyBalance: megacity.energyBalance,
+      strategicTension: warfare.strategicTension,
+      timelineBranches: prediction.branches.length,
+      futureConvergence: prediction.convergenceScore
+    };
+    return this.civilization;
+  }
+
   snapshot(): TelemetrySnapshot {
     const averageFps =
       this.frames.length > 0 ? this.frames.reduce((sum, frame) => sum + frame.fps, 0) / this.frames.length : 0;
@@ -141,7 +185,8 @@ export class TelemetryEngine {
     return {
       ...snapshot,
       ...(this.neural ? { neural: this.neural } : {}),
-      ...(this.swarm ? { swarm: this.swarm } : {})
+      ...(this.swarm ? { swarm: this.swarm } : {}),
+      ...(this.civilization ? { civilization: this.civilization } : {})
     };
   }
 
@@ -150,6 +195,7 @@ export class TelemetryEngine {
     this.algorithms.clear();
     this.neural = undefined;
     this.swarm = undefined;
+    this.civilization = undefined;
     this.frameCounter = 0;
   }
 

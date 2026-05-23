@@ -6,6 +6,7 @@ import {
   Cpu,
   Database,
   Gauge,
+  Globe2,
   Layers3,
   Move,
   Network,
@@ -16,6 +17,7 @@ import {
   Shield,
   Sparkles,
   Terminal,
+  Waypoints,
   Zap
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -67,16 +69,24 @@ export function CommandCenter() {
     events,
     learning,
     swarm,
+    civilization,
+    megacity,
+    warfare,
+    prediction,
+    personality,
+    shell,
     telemetry,
     selectAlgorithm,
     runBattle,
     trainNeural,
-    stepSwarm,
+    stepCivilization,
+    runCommand,
     refreshTelemetry
   } =
     useCommandCenterStore();
   const neuralRef = useRef(learning.neural);
   const swarmRef = useRef(swarm);
+  const civilizationRef = useRef({ civilization, megacity, warfare, prediction });
   const [bootComplete, setBootComplete] = useState(false);
   const completeBoot = useCallback(() => setBootComplete(true), []);
 
@@ -122,11 +132,16 @@ export function CommandCenter() {
   }, [swarm]);
 
   useEffect(() => {
+    civilizationRef.current = { civilization, megacity, warfare, prediction };
+    rendererRef.current?.renderCivilizationSnapshot(civilization, megacity, prediction, warfare);
+  }, [civilization, megacity, prediction, warfare]);
+
+  useEffect(() => {
     const interval = window.setInterval(() => {
-      stepSwarm();
-    }, 900);
+      stepCivilization();
+    }, 1400);
     return () => window.clearInterval(interval);
-  }, [stepSwarm]);
+  }, [stepCivilization]);
 
   useEffect(() => {
     if (!booted || events.length === 0) return;
@@ -137,6 +152,12 @@ export function CommandCenter() {
       rendererRef.current?.renderBattleGrid(grid, battle);
       rendererRef.current?.renderNeuralSnapshot(neuralRef.current);
       rendererRef.current?.renderSwarmSnapshot(swarmRef.current);
+      rendererRef.current?.renderCivilizationSnapshot(
+        civilizationRef.current.civilization,
+        civilizationRef.current.megacity,
+        civilizationRef.current.prediction,
+        civilizationRef.current.warfare
+      );
       raceSchedulerRef.current?.load(
         battle.contestants.slice(0, 4).map((contestant, lane) => ({
           algorithm: contestant.algorithm,
@@ -152,6 +173,12 @@ export function CommandCenter() {
     rendererRef.current?.renderGrid(grid);
     rendererRef.current?.renderNeuralSnapshot(neuralRef.current);
     rendererRef.current?.renderSwarmSnapshot(swarmRef.current);
+    rendererRef.current?.renderCivilizationSnapshot(
+      civilizationRef.current.civilization,
+      civilizationRef.current.megacity,
+      civilizationRef.current.prediction,
+      civilizationRef.current.warfare
+    );
     schedulerRef.current?.load(events, 1.3);
     schedulerRef.current?.start();
   }, [battle, booted, events, grid]);
@@ -168,7 +195,13 @@ export function CommandCenter() {
       <section className="relative grid min-h-[calc(100vh-2rem)] grid-cols-1 gap-4 xl:grid-cols-[310px_1fr_330px]">
         <aside className="hud-panel z-10 flex flex-col gap-4 rounded-lg p-4">
           <SystemHeader booted={booted} />
-          <AlgorithmDock selected={selectedAlgorithm} onSelect={selectAlgorithm} onRun={runBattle} onTrain={() => trainNeural(24)} />
+          <AlgorithmDock
+            selected={selectedAlgorithm}
+            onSelect={selectAlgorithm}
+            onRun={runBattle}
+            onTrain={() => trainNeural(24)}
+            onSimulate={stepCivilization}
+          />
           <MetricStrip
             items={[
               { icon: Gauge, label: "AVG FPS", value: telemetry.averageFps.toFixed(1) },
@@ -195,6 +228,7 @@ export function CommandCenter() {
           <TelemetryPanel />
           <RenderDiagnosticsPanel stats={rendererStats} droppedFrameRatio={telemetry.droppedFrameRatio} />
           <NeuralDiagnosticsPanel />
+          <CivilizationPanel />
           <LearningPanel epochs={learning.epochs.slice(-18)} confidence={learning.confidence} />
           <MetricStrip
             items={[
@@ -213,6 +247,15 @@ export function CommandCenter() {
           <StatusTile icon={Shield} label="Risk" value={`${Math.round(swarm.collisionRisk * 100)}%`} compact />
         </div>
       </DraggableHudPanel>
+      <DraggableHudPanel title="CIVILIZATION OPS" initial={{ x: 28, y: 360 }}>
+        <div className="grid grid-cols-2 gap-2">
+          <StatusTile icon={Globe2} label="Population" value={`${Math.round(civilization.totalPopulation / 1000)}K`} compact />
+          <StatusTile icon={Waypoints} label="Future" value={`${Math.round(prediction.convergenceScore * 100)}%`} compact />
+          <StatusTile icon={Shield} label="Tension" value={`${Math.round(warfare.strategicTension * 100)}%`} compact />
+          <StatusTile icon={Network} label="Voice" value={personality.systemMood.toUpperCase()} compact />
+        </div>
+      </DraggableHudPanel>
+      <CommandShell entries={shell} onCommand={runCommand} />
     </main>
   );
 }
@@ -302,6 +345,22 @@ function NeuralDiagnosticsPanel() {
   );
 }
 
+function CivilizationPanel() {
+  const telemetry = useCommandCenterStore((state) => state.telemetry);
+  const civilization = telemetry.civilization;
+  return (
+    <div>
+      <div className="font-mono text-xs uppercase tracking-[0.2em] text-reactor">Civilization Systems</div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+        <StatusTile icon={Globe2} label="Civ Tick" value={(civilization?.tick ?? 0).toString()} compact />
+        <StatusTile icon={Network} label="Drones" value={(civilization?.droneRoutes ?? 0).toString()} compact />
+        <StatusTile icon={Shield} label="Conflict" value={`${Math.round((civilization?.strategicTension ?? 0) * 100)}%`} compact />
+        <StatusTile icon={Waypoints} label="Branches" value={(civilization?.timelineBranches ?? 0).toString()} compact />
+      </div>
+    </div>
+  );
+}
+
 function SystemHeader({ booted }: { readonly booted: boolean }) {
   return (
     <div>
@@ -320,12 +379,14 @@ function AlgorithmDock({
   selected,
   onSelect,
   onRun,
-  onTrain
+  onTrain,
+  onSimulate
 }: {
   readonly selected: AlgorithmId;
   readonly onSelect: (algorithm: AlgorithmId) => void;
   readonly onRun: () => void;
   readonly onTrain: () => void;
+  readonly onSimulate: () => void;
 }) {
   return (
     <div className="grid gap-3">
@@ -345,6 +406,14 @@ function AlgorithmDock({
         <Brain size={15} />
         Train Neural Core
       </button>
+      <button
+        type="button"
+        onClick={onSimulate}
+        className="flex h-10 items-center justify-center gap-2 rounded-md border border-cobalt/40 bg-cobalt/10 font-mono text-xs uppercase text-cobalt transition hover:bg-cobalt/20"
+      >
+        <Globe2 size={15} />
+        Simulate Civilization
+      </button>
       <div className="grid grid-cols-2 gap-2">
         {commandCenterAlgorithms.map((algorithm) => (
           <button
@@ -361,6 +430,51 @@ function AlgorithmDock({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function CommandShell({
+  entries,
+  onCommand
+}: {
+  readonly entries: readonly { readonly id: string; readonly command: string; readonly output: string }[];
+  readonly onCommand: (command: string) => void;
+}) {
+  const [command, setCommand] = useState("");
+  return (
+    <div className="hud-panel absolute bottom-5 left-5 right-5 z-20 hidden rounded-lg p-3 xl:block">
+      <div className="mb-2 flex items-center gap-2 font-mono text-xs uppercase tracking-[0.18em] text-plasma">
+        <Terminal size={13} />
+        Command Shell
+      </div>
+      <div className="grid max-h-24 gap-1 overflow-hidden font-mono text-xs text-slate-300">
+        {entries.slice(-4).map((entry) => (
+          <div key={entry.id}>
+            <span className="text-reactor">&gt; {entry.command}</span>
+            <span className="ml-2 text-slate-400">{entry.output}</span>
+          </div>
+        ))}
+      </div>
+      <form
+        className="mt-3 flex gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!command.trim()) return;
+          onCommand(command);
+          setCommand("");
+        }}
+      >
+        <input
+          value={command}
+          onChange={(event) => setCommand(event.target.value)}
+          className="h-9 min-w-0 flex-1 rounded-md border border-white/10 bg-black/30 px-3 font-mono text-sm text-white outline-none focus:border-plasma/60"
+          placeholder="simulate | predict | train | battle"
+        />
+        <button type="submit" className="h-9 rounded-md border border-plasma/40 px-4 font-mono text-xs uppercase text-plasma">
+          Execute
+        </button>
+      </form>
     </div>
   );
 }

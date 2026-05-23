@@ -8,7 +8,19 @@ import type { AlgorithmId, BattleResult, GridModel, PathfinderEvent } from "../c
 import { LearningAgent, type LearningSnapshot } from "../ai/learning-agent";
 import { NeuralMemoryStore } from "../ai/neural-memory";
 import { SwarmIntelligenceSystem, type SwarmSnapshot } from "../ai/swarm-intelligence";
+import { CivilizationEngine, type CivilizationSnapshot } from "../civilization/civilization-engine";
+import { FactionWarfareEngine, type WarfareSnapshot } from "../civilization/faction-warfare";
+import { MegacitySimulation, type MegacitySnapshot } from "../civilization/megacity-simulation";
+import { MultiversePredictionEngine, type MultiversePredictionSnapshot } from "../civilization/multiverse-prediction";
+import { PersonalityMatrix, type PersonalityMatrixSnapshot } from "../civilization/personality-matrix";
 import { TelemetryEngine, type TelemetrySnapshot } from "../telemetry/telemetry-engine";
+
+export interface CommandShellEntry {
+  readonly id: string;
+  readonly command: string;
+  readonly output: string;
+  readonly timestamp: number;
+}
 
 interface CommandCenterState {
   readonly grid: GridModel;
@@ -17,11 +29,19 @@ interface CommandCenterState {
   readonly events: readonly PathfinderEvent[];
   readonly learning: LearningSnapshot;
   readonly swarm: SwarmSnapshot;
+  readonly civilization: CivilizationSnapshot;
+  readonly megacity: MegacitySnapshot;
+  readonly warfare: WarfareSnapshot;
+  readonly prediction: MultiversePredictionSnapshot;
+  readonly personality: PersonalityMatrixSnapshot;
+  readonly shell: readonly CommandShellEntry[];
   readonly telemetry: TelemetrySnapshot;
   selectAlgorithm: (algorithm: AlgorithmId) => void;
   runBattle: () => void;
   trainNeural: (epochs?: number) => void;
   stepSwarm: () => void;
+  stepCivilization: () => void;
+  runCommand: (command: string) => void;
   ingestEvents: (events: readonly PathfinderEvent[]) => void;
   refreshTelemetry: () => void;
 }
@@ -42,10 +62,28 @@ const learningAgent = new LearningAgent();
 const missionGrid = createMissionGrid();
 const memoryStore = new NeuralMemoryStore();
 const swarmSystem = new SwarmIntelligenceSystem(missionGrid);
+const civilizationEngine = new CivilizationEngine(missionGrid);
+const megacitySimulation = new MegacitySimulation(missionGrid);
+const warfareEngine = new FactionWarfareEngine();
+const predictionEngine = new MultiversePredictionEngine();
+const personalityMatrix = new PersonalityMatrix();
 const initialLearning = learningAgent.train(missionGrid, 52);
 telemetryEngine.recordNeural(initialLearning.neural);
 const initialSwarm = swarmSystem.step(missionGrid, initialLearning.neural);
 telemetryEngine.recordSwarm(initialSwarm);
+const initialCivilization = civilizationEngine.step(missionGrid, initialLearning.neural, initialSwarm);
+const initialMegacity = megacitySimulation.step(initialCivilization);
+const initialWarfare = warfareEngine.step(initialCivilization);
+const initialPrediction = predictionEngine.forecast(initialCivilization, initialMegacity, initialWarfare);
+const initialPersonality = personalityMatrix.synthesize(initialCivilization, initialWarfare, initialPrediction);
+telemetryEngine.recordCivilization(initialCivilization, initialMegacity, initialWarfare, initialPrediction);
+
+const createShellEntry = (command: string, output: string): CommandShellEntry => ({
+  id: crypto.randomUUID(),
+  command,
+  output,
+  timestamp: performance.now()
+});
 
 export const useCommandCenterStore = create<CommandCenterState>((set, get) => ({
   grid: missionGrid,
@@ -54,6 +92,14 @@ export const useCommandCenterStore = create<CommandCenterState>((set, get) => ({
   events: [],
   learning: initialLearning,
   swarm: initialSwarm,
+  civilization: initialCivilization,
+  megacity: initialMegacity,
+  warfare: initialWarfare,
+  prediction: initialPrediction,
+  personality: initialPersonality,
+  shell: [
+    createShellEntry("boot", "Civilization substrate synchronized. Megacity, faction, and multiverse systems online.")
+  ],
   telemetry: telemetryEngine.snapshot(),
   selectAlgorithm: (algorithm) => set({ selectedAlgorithm: algorithm }),
   runBattle: () => {
@@ -71,6 +117,56 @@ export const useCommandCenterStore = create<CommandCenterState>((set, get) => ({
     const swarm = swarmSystem.step(get().grid, get().learning.neural);
     telemetryEngine.recordSwarm(swarm);
     set({ swarm, telemetry: telemetryEngine.snapshot() });
+  },
+  stepCivilization: () => {
+    const swarm = swarmSystem.step(get().grid, get().learning.neural);
+    const civilization = civilizationEngine.step(get().grid, get().learning.neural, swarm);
+    const megacity = megacitySimulation.step(civilization);
+    const warfare = warfareEngine.step(civilization);
+    const prediction = predictionEngine.forecast(civilization, megacity, warfare);
+    const personality = personalityMatrix.synthesize(civilization, warfare, prediction);
+    telemetryEngine.recordSwarm(swarm);
+    telemetryEngine.recordCivilization(civilization, megacity, warfare, prediction);
+    set({ swarm, civilization, megacity, warfare, prediction, personality, telemetry: telemetryEngine.snapshot() });
+  },
+  runCommand: (command) => {
+    const normalized = command.trim().toLowerCase();
+    if (normalized === "simulate" || normalized === "tick") {
+      get().stepCivilization();
+      set((state) => ({
+        shell: [...state.shell.slice(-5), createShellEntry(command, `Advanced civilization tick ${get().civilization.tick + 1}.`)]
+      }));
+      return;
+    }
+    if (normalized === "predict") {
+      const prediction = predictionEngine.forecast(get().civilization, get().megacity, get().warfare, 144);
+      const personality = personalityMatrix.synthesize(get().civilization, get().warfare, prediction);
+      telemetryEngine.recordCivilization(get().civilization, get().megacity, get().warfare, prediction);
+      set((state) => ({
+        prediction,
+        personality,
+        telemetry: telemetryEngine.snapshot(),
+        shell: [...state.shell.slice(-5), createShellEntry(command, `Forecast locked on ${prediction.mostLikelyBranchId}.`)]
+      }));
+      return;
+    }
+    if (normalized === "train") {
+      get().trainNeural(24);
+      set((state) => ({
+        shell: [...state.shell.slice(-5), createShellEntry(command, "Neural core trained for 24 epochs.")]
+      }));
+      return;
+    }
+    if (normalized === "battle") {
+      get().runBattle();
+      set((state) => ({
+        shell: [...state.shell.slice(-5), createShellEntry(command, "Algorithm race initiated.")]
+      }));
+      return;
+    }
+    set((state) => ({
+      shell: [...state.shell.slice(-5), createShellEntry(command, "Commands: simulate, predict, train, battle.")]
+    }));
   },
   ingestEvents: (events) =>
     set((state) => ({

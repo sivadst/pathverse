@@ -63,6 +63,16 @@ git push origin main
 - **Command center OS:** the UI adds a cinematic boot console, trainable neural core controls, neural diagnostics, swarm diagnostics, and a draggable holographic operations panel.
 - **Camera foundation:** `CinematicCameraController` provides tactical/focus/replay camera state for future world-scale simulation and replay flyovers.
 
+## Phase 3 Emergent Civilization Simulation
+
+- **Civilization engine:** autonomous populations evolve territory, resources, cohesion, strategy, collaboration, and conflict pressure.
+- **Megacity simulation:** procedural districts, drone logistics, traffic flows, energy pulses, and neural transport efficiency are simulated on top of the grid.
+- **Faction warfare:** competing factions derive strategic control, diplomacy, rivalry, war posture, and dominant influence.
+- **Multiverse prediction:** alternate futures forecast population deltas, conflict risk, resource risk, convergence, and most-likely timelines.
+- **Personality matrix:** AI identities synthesize faction traits into tactical profiles and contextual command dialogue.
+- **World rendering:** `CivilizationVisualizationLayer` draws influence maps, resources, districts, drones, energy propagation, warfare links, and future timeline arcs inside Pixi.
+- **OS shell:** command-center shell supports `simulate`, `predict`, `train`, and `battle` for persistent operator workflows.
+
 ## Next Phases
 
 1. FastAPI backend with async repository/service architecture.

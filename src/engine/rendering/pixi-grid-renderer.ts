@@ -4,9 +4,14 @@ import { CrtOverlay } from "./crt-overlay";
 import { GpuParticleEngine } from "./gpu-particle-engine";
 import { NeonTrailSystem } from "./neon-trail-system";
 import { NeuralVisualizationLayer } from "./neural-visualization";
+import { CivilizationVisualizationLayer } from "./civilization-visualization";
 import { AdaptiveRenderQuality, type RenderQualityMode, type RenderQualityProfile } from "./render-quality";
 import type { NeuralLearningSnapshot } from "../ai/neural-learning-engine";
 import type { SwarmSnapshot } from "../ai/swarm-intelligence";
+import type { CivilizationSnapshot } from "../civilization/civilization-engine";
+import type { MegacitySnapshot } from "../civilization/megacity-simulation";
+import type { MultiversePredictionSnapshot } from "../civilization/multiverse-prediction";
+import type { WarfareSnapshot } from "../civilization/faction-warfare";
 
 export interface RendererDiagnostics {
   readonly drawCalls: number;
@@ -65,6 +70,7 @@ export class PixiGridRenderer {
   private readonly particleEngine = new GpuParticleEngine(this.quality.current);
   private readonly trailSystem = new NeonTrailSystem(this.quality.current);
   private readonly neuralLayer: NeuralVisualizationLayer;
+  private readonly civilizationLayer: CivilizationVisualizationLayer;
   private grid: GridModel | undefined;
   private layouts: readonly ViewportLayout[] = [];
   private cellSize = 12;
@@ -72,6 +78,7 @@ export class PixiGridRenderer {
 
   constructor() {
     this.neuralLayer = new NeuralVisualizationLayer(this.projectNeuralPosition);
+    this.civilizationLayer = new CivilizationVisualizationLayer(this.projectNeuralPosition);
   }
 
   async mount(host: HTMLElement, options: PixiGridRendererOptions = {}): Promise<void> {
@@ -90,6 +97,7 @@ export class PixiGridRenderer {
     this.world.sortableChildren = false;
     this.glowLayer.filters = [this.bloomFilter];
     this.glowLayer.addChild(this.eventLayer);
+    this.glowLayer.addChild(this.civilizationLayer.container);
     this.glowLayer.addChild(this.neuralLayer.container);
     this.glowLayer.addChild(this.trailSystem.container);
     this.particleEngine.attach(this.glowLayer);
@@ -109,6 +117,7 @@ export class PixiGridRenderer {
     this.trailSystem.clear();
     this.particleEngine.clear();
     this.neuralLayer.clear();
+    this.civilizationLayer.clear();
     this.drawCalls = 0;
 
     const viewportWidth = this.app.renderer.width / this.app.renderer.resolution;
@@ -129,6 +138,7 @@ export class PixiGridRenderer {
     this.trailSystem.clear();
     this.particleEngine.clear();
     this.neuralLayer.clear();
+    this.civilizationLayer.clear();
     this.drawCalls = 0;
 
     const viewportWidth = this.app.renderer.width / this.app.renderer.resolution;
@@ -199,6 +209,16 @@ export class PixiGridRenderer {
     this.neuralLayer.setSwarmSnapshot(snapshot);
   }
 
+  renderCivilizationSnapshot(
+    civilization: CivilizationSnapshot,
+    megacity: MegacitySnapshot,
+    prediction: MultiversePredictionSnapshot,
+    warfare: WarfareSnapshot,
+    lane = 0
+  ): void {
+    this.civilizationLayer.setWorld(civilization, megacity, prediction, warfare, lane);
+  }
+
   diagnostics(): RendererDiagnostics {
     const renderer = this.app?.renderer;
     return {
@@ -221,6 +241,7 @@ export class PixiGridRenderer {
     this.trailSystem.clear();
     this.particleEngine.clear();
     this.neuralLayer.clear();
+    this.civilizationLayer.clear();
   }
 
   setQuality(profile: RenderQualityProfile): void {
@@ -238,6 +259,7 @@ export class PixiGridRenderer {
     this.trailSystem.update(deltaMs);
     this.particleEngine.update(deltaMs);
     this.neuralLayer.update(deltaMs);
+    this.civilizationLayer.update(deltaMs);
   }
 
   private createLayout(
