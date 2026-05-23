@@ -1,10 +1,12 @@
 import type { AlgorithmId, PathfinderMetrics } from "../core/types";
 import type { NeuralLearningSnapshot } from "../ai/neural-learning-engine";
 import type { SwarmSnapshot } from "../ai/swarm-intelligence";
+import type { ThoughtStreamSnapshot } from "../ai/thought-stream-engine";
 import type { CivilizationSnapshot } from "../civilization/civilization-engine";
 import type { MegacitySnapshot } from "../civilization/megacity-simulation";
 import type { MultiversePredictionSnapshot } from "../civilization/multiverse-prediction";
 import type { WarfareSnapshot } from "../civilization/faction-warfare";
+import type { TemporalMemorySnapshot } from "../civilization/temporal-memory-engine";
 
 export interface FrameSample {
   readonly frame: number;
@@ -32,6 +34,9 @@ export interface TelemetrySnapshot {
   readonly neural?: NeuralTelemetry;
   readonly swarm?: SwarmTelemetry;
   readonly civilization?: CivilizationTelemetry;
+  readonly consciousness?: ConsciousnessTelemetry;
+  readonly temporalMemory?: TemporalTelemetry;
+  readonly atmospheric?: AtmosphericTelemetry;
 }
 
 export interface NeuralTelemetry {
@@ -66,6 +71,34 @@ export interface CivilizationTelemetry {
   readonly futureConvergence: number;
 }
 
+export interface ConsciousnessTelemetry {
+  readonly reasoningIntensity: number;
+  readonly uncertaintyIndex: number;
+  readonly thoughtPulseCount: number;
+  readonly dominantCognitionMode: string;
+  readonly propagationDensity: number;
+  readonly focusRadius: number;
+  readonly waveCount: number;
+}
+
+export interface TemporalTelemetry {
+  readonly totalEvents: number;
+  readonly currentEpochMood: string;
+  readonly epochCount: number;
+  readonly betrayalCount: number;
+  readonly ideologyDriftRate: number;
+  readonly currentEpochDuration: number;
+  readonly eventFrequency: number;
+}
+
+export interface AtmosphericTelemetry {
+  readonly currentWeather: string;
+  readonly fogDensity: number;
+  readonly distortionAmplitude: number;
+  readonly lightningChance: number;
+  readonly activeLayerCount: number;
+}
+
 export class TelemetryEngine {
   private readonly maxFrames: number;
   private readonly frames: FrameSample[] = [];
@@ -73,6 +106,9 @@ export class TelemetryEngine {
   private neural: NeuralTelemetry | undefined;
   private swarm: SwarmTelemetry | undefined;
   private civilization: CivilizationTelemetry | undefined;
+  private consciousness: ConsciousnessTelemetry | undefined;
+  private temporalMemory: TemporalTelemetry | undefined;
+  private atmospheric: AtmosphericTelemetry | undefined;
   private frameCounter = 0;
 
   constructor(maxFrames = 240) {
@@ -162,6 +198,51 @@ export class TelemetryEngine {
     return this.civilization;
   }
 
+  recordConsciousness(thought: ThoughtStreamSnapshot): ConsciousnessTelemetry {
+    const reasoningPulses = thought.pulses.filter((p) => p.category === "reasoning");
+    const propagationDensity = thought.propagations.length > 0
+      ? thought.propagations.reduce((sum, p) => sum + p.strength, 0) / thought.propagations.length
+      : 0;
+    this.consciousness = {
+      reasoningIntensity: thought.reasoningIntensity,
+      uncertaintyIndex: thought.uncertaintyIndex,
+      thoughtPulseCount: thought.pulses.length,
+      dominantCognitionMode: thought.cognitionField.dominantMode,
+      propagationDensity,
+      focusRadius: thought.cognitionField.focusRadius,
+      waveCount: thought.waves.length
+    };
+    return this.consciousness;
+  }
+
+  recordTemporalMemory(memory: TemporalMemorySnapshot): TemporalTelemetry {
+    const currentEpochDuration = memory.currentEpoch.endTick > memory.currentEpoch.startTick
+      ? memory.currentEpoch.endTick - memory.currentEpoch.startTick
+      : memory.events.length > 0 ? (memory.events.at(-1)?.tick ?? 0) - memory.currentEpoch.startTick : 0;
+    const recentEvents = memory.events.filter((e) => e.tick > (memory.events.at(-1)?.tick ?? 0) - 20);
+    this.temporalMemory = {
+      totalEvents: memory.totalEvents,
+      currentEpochMood: memory.currentEpochMood,
+      epochCount: memory.epochs.length + 1,
+      betrayalCount: memory.betrayalCount,
+      ideologyDriftRate: memory.ideologyDriftRate,
+      currentEpochDuration,
+      eventFrequency: recentEvents.length / 20
+    };
+    return this.temporalMemory;
+  }
+
+  recordAtmospheric(weather: string, fogDensity: number, distortion: number, lightning: number, layers: number): AtmosphericTelemetry {
+    this.atmospheric = {
+      currentWeather: weather,
+      fogDensity,
+      distortionAmplitude: distortion,
+      lightningChance: lightning,
+      activeLayerCount: layers
+    };
+    return this.atmospheric;
+  }
+
   snapshot(): TelemetrySnapshot {
     const averageFps =
       this.frames.length > 0 ? this.frames.reduce((sum, frame) => sum + frame.fps, 0) / this.frames.length : 0;
@@ -186,7 +267,10 @@ export class TelemetryEngine {
       ...snapshot,
       ...(this.neural ? { neural: this.neural } : {}),
       ...(this.swarm ? { swarm: this.swarm } : {}),
-      ...(this.civilization ? { civilization: this.civilization } : {})
+      ...(this.civilization ? { civilization: this.civilization } : {}),
+      ...(this.consciousness ? { consciousness: this.consciousness } : {}),
+      ...(this.temporalMemory ? { temporalMemory: this.temporalMemory } : {}),
+      ...(this.atmospheric ? { atmospheric: this.atmospheric } : {})
     };
   }
 
@@ -196,6 +280,9 @@ export class TelemetryEngine {
     this.neural = undefined;
     this.swarm = undefined;
     this.civilization = undefined;
+    this.consciousness = undefined;
+    this.temporalMemory = undefined;
+    this.atmospheric = undefined;
     this.frameCounter = 0;
   }
 
