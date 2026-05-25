@@ -75,7 +75,6 @@ export function CommandCenter() {
     prediction,
     personality,
     thought,
-    temporalMemory,
     shell,
     telemetry,
     selectAlgorithm,

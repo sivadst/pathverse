@@ -276,8 +276,8 @@ export class TemporalMemoryEngine {
       const snapshots = this.ideologyTimeline.filter((s) => s.factionId === fid)
       const recent = snapshots.slice(-5)
       for (let i = 1; i < recent.length; i++) {
-        const prev = recent[i - 1]
-        const curr = recent[i]
+        const prev = recent[i - 1]!
+        const curr = recent[i]!
         totalDrift +=
           Math.abs(curr.aggression - prev.aggression) +
           Math.abs(curr.cooperation - prev.cooperation) +

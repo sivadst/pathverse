@@ -61,9 +61,7 @@ export class AudioReactiveEngine {
     if (this.initialized) return true
     const ContextClass = typeof AudioContext !== "undefined"
       ? AudioContext
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       : typeof (globalThis as Record<string, unknown>)["webkitAudioContext"] !== "undefined"
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ? (globalThis as Record<string, unknown>)["webkitAudioContext"] as typeof AudioContext
         : undefined
     if (!ContextClass) return false

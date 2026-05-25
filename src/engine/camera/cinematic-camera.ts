@@ -30,8 +30,8 @@ export interface CameraState {
   readonly rotation: number
   readonly mode: CameraMode
   readonly shake: number
-  readonly focusTarget?: GridPosition
-  readonly sequenceProgress?: number
+  readonly focusTarget?: GridPosition | undefined
+  readonly sequenceProgress?: number | undefined
 }
 
 // ── Easing Functions ─────────────────────────────────────────────────────────
@@ -231,15 +231,15 @@ export class CinematicCameraController {
     let idx = 0
 
     // Walk through keyframes to find the current one
-    while (idx < keyframes.length - 1 && elapsed > keyframes[idx].duration) {
-      elapsed -= keyframes[idx].duration
+    while (idx < keyframes.length - 1 && elapsed > keyframes[idx]!.duration) {
+      elapsed -= keyframes[idx]!.duration
       idx++
     }
 
     // Compute total duration for progress tracking
     let totalDuration = 0
     for (let i = 0; i < keyframes.length; i++) {
-      totalDuration += keyframes[i].duration
+      totalDuration += keyframes[i]!.duration
     }
 
     if (idx >= keyframes.length - 1) {
@@ -250,7 +250,7 @@ export class CinematicCameraController {
         return
       }
       // Done — snap to last keyframe and switch to tactical
-      const last = keyframes[keyframes.length - 1]
+      const last = keyframes[keyframes.length - 1]!
       this.targetX = last.x
       this.targetY = last.y
       this.targetRotation = last.rotation
@@ -265,8 +265,8 @@ export class CinematicCameraController {
     }
 
     this.sequenceKeyframeIndex = idx
-    const current = keyframes[idx]
-    const next = keyframes[idx + 1]
+    const current = keyframes[idx]!
+    const next = keyframes[idx + 1]!
     const t = easeInOutCubic(clamp01(elapsed / current.duration))
 
     this.targetX = current.x + (next.x - current.x) * t

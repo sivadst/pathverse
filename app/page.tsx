@@ -1,5 +1,5 @@
-import { CommandCenter } from "@/components/command-center/command-center";
+import { PathVersePlatform } from "@/components/platform/pathverse-platform";
 
 export default function Home() {
-  return <CommandCenter />;
+  return <PathVersePlatform />;
 }

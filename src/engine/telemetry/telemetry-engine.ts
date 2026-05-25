@@ -199,7 +199,6 @@ export class TelemetryEngine {
   }
 
   recordConsciousness(thought: ThoughtStreamSnapshot): ConsciousnessTelemetry {
-    const reasoningPulses = thought.pulses.filter((p) => p.category === "reasoning");
     const propagationDensity = thought.propagations.length > 0
       ? thought.propagations.reduce((sum, p) => sum + p.strength, 0) / thought.propagations.length
       : 0;
